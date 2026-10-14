@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Home Guardian — Painel IoT Simulado</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    body { background:#071116; color:#E8F4F2; font-family:Arial,sans-serif;
+           max-width:700px; margin:40px auto; text-align:center; }
+    h1 { color:#4DB6AC; }
+    select { padding:10px 16px; background:#0D2529; color:#E8F4F2;
+             border:1px solid #4DB6AC; border-radius:8px; font-size:16px; }
+    .grade { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:24px; }
+    button { padding:22px 10px; font-size:16px; font-weight:bold; color:#fff;
+             background:#0D2529; border:2px solid #4DB6AC; border-radius:12px;
+             cursor:pointer; transition:.2s; }
+    button:hover { background:#4DB6AC; color:#071116; }
+    button.critico { border-color:#e57373; } button.critico:hover { background:#e57373; }
+    #log { margin-top:26px; text-align:left; background:#0B1A1F;
+           border:1px solid #214044; border-radius:10px; padding:14px;
+           min-height:120px; font-size:14px; }
+    .info{color:#90caf9} .atencao{color:#ffb74d} .critico{color:#e57373}
+  </style>
+</head>
+<body>
+  <h1>🛡️ Painel IoT Simulado</h1>
+  <p>Simule os sensores da residência — os eventos chegam em tempo real.</p>
+
+  <select id="ambiente">
+    <option value="">Sem ambiente específico</option>
+    <option value="1">Sala</option>
+    <option value="2">Cozinha</option>
+    <option value="3">Quarto</option>
+    <option value="4">Garagem</option>
+  </select>
+
+  <div class="grade">
+    <button onclick="disparar('movimento')">🚶 Movimento</button>
+    <button onclick="disparar('porta_aberta')">🚪 Porta aberta</button>
+    <button onclick="disparar('temperatura_elevada')">🔥 Temperatura elevada</button>
+    <button class="critico" onclick="disparar('invasao')">🚨 Tentativa de invasão</button>
+  </div>
+
+  <div id="log"><b>Log de eventos:</b><br></div>
+
+  <script>
+    // Conecta no MESMO servidor do backend — o socket.io.js já é servido por ele
+    const socket = io('http://localhost:3000');
+
+    socket.on('connect', () => console.log('Conectado!'));
+
+    // Qualquer 'novo_evento' vindo do servidor aparece no log na hora
+    socket.on('novo_evento', (evento) => registrarLog(evento));
+    socket.on('evento_registrado', () => console.log('Confirmado pelo servidor'));
+    socket.on('erro', (e) => alert(e.mensagem));
+
+    function disparar(tipo) {
+      const ambiente = document.getElementById('ambiente').value;
+      socket.emit('simular_evento', {
+        usuario_id: 1,                       // usuário de teste
+        ambiente_id: ambiente ? Number(ambiente) : null,
+        tipo: tipo,
+      });
+    }
+
+    function registrarLog(ev) {
+      const hora = new Date(ev.criado_em).toLocaleTimeString('pt-BR');
+      document.getElementById('log').innerHTML +=
+        `<br>[${hora}] <span class="${ev.severidade}">⚠ ${ev.titulo}</span>`;
+    }
+  </script>
+</body>
+</html>
