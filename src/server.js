@@ -2,7 +2,10 @@
 // SMART HOME GUARDIAN - BACKEND
 // Servidor principal + health check + banco + autenticação
 // + Ambientes/Eventos + IoT simulada em tempo real (Socket.io)
+// + Variáveis de ambiente (dotenv)
 // ============================================================
+require('dotenv').config(); // ⬅️ NOVO: carrega o .env PRIMEIRO de tudo
+
 const express = require('express');
 const http = require('http');
 const cors = require('cors');
