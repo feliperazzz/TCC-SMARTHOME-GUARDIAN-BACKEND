@@ -89,13 +89,13 @@ O painel de simulação (`/painel`) emite eventos via Socket.io que são validad
 - [x] Persistência do evento no banco ANTES da transmissão em tempo real.
 
 ### Integração com o Aplicativo (Em andamento)
-- [ ] Consumo da API pelo app Flutter (login com token e listagens).
-- [ ] Socket.io no Flutter recebendo `novo_evento` em tempo real.
-- [ ] Tratamento de erros, loading states e reconexão.
+- [x] Consumo da API pelo app Flutter (login com token e listagens).
+- [x] Socket.io no Flutter recebendo `novo_evento` em tempo real.
+- [x] Tratamento de erros, loading states e reconexão.
 
 ### Polimento e Entrega
-- [ ] Testes de usabilidade e caça a bugs (QA).
-- [ ] Variáveis de ambiente (`.env`) para credenciais e JWT_SECRET.
+- [x] Testes de usabilidade e caça a bugs (QA).
+- [x] Variáveis de ambiente (`.env`) para credenciais e JWT_SECRET.
 - [ ] Ensaios práticos dos **5 Cenários de Demonstração** da banca.
 - [ ] Congelamento de código (Code Freeze) e entrega da documentação final.
 

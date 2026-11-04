@@ -1,14 +1,9 @@
 -- ============================================================
 -- SMART HOME GUARDIAN - SCHEMA DO BANCO DE DADOS
 -- MySQL 8.x — cria a estrutura completa do sistema
--- Uso: mysql -u root -p < schema.sql
+-- Uso: conectar no banco (Aiven ou local) e executar este script
+-- No Aiven: aba "Queries" do serviço no console, ou Workbench/DBeaver
 -- ============================================================
-
-CREATE DATABASE IF NOT EXISTS smarthome_guardian
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
-
-USE smarthome_guardian;
 
 -- ------------------------------------------------------------
 -- TABELA: usuarios

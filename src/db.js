@@ -1,6 +1,6 @@
 // ============================================================
-// CONEXÃO COM O BANCO MySQL/MariaDB
-// Os dados sensíveis agora vêm do arquivo .env
+// CONEXÃO COM O BANCO MySQL — local ou nuvem (Aiven)
+// Os dados sensíveis vêm do arquivo .env
 // (nada de senha escrita direto no código!)
 // ============================================================
 require('dotenv').config(); // carrega o .env ANTES de tudo
@@ -15,6 +15,12 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
+  // SSL: obrigatório na nuvem (Aiven). Ativa quando DB_SSL=true no .env.
+  // Com DB_SSL=false (ou sem a linha), conecta normal no MySQL local.
+  ssl:
+    process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : undefined,
 });
 
 module.exports = pool;

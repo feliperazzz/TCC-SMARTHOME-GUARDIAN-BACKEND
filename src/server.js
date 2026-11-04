@@ -1,10 +1,11 @@
 // ============================================================
 // SMART HOME GUARDIAN - BACKEND
 // Servidor principal + health check + banco + autenticação
-// + Ambientes/Eventos + IoT simulada em tempo real (Socket.io)
+// + Ambientes/Eventos + Sistema (armar/desarmar)
+// + IoT simulada em tempo real (Socket.io)
 // + Variáveis de ambiente (dotenv)
 // ============================================================
-require('dotenv').config(); // ⬅️ NOVO: carrega o .env PRIMEIRO de tudo
+require('dotenv').config(); // ⬅️ carrega o .env PRIMEIRO de tudo
 
 const express = require('express');
 const http = require('http');
@@ -15,6 +16,7 @@ const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const ambientesRoutes = require('./routes/ambientes.routes');
 const eventosRoutes = require('./routes/eventos.routes');
+const sistemaRoutes = require('./routes/sistema'); // ===== 7.7 NOVO =====
 const { configurarIoT } = require('./sockets/iot.socket');
 
 const app = express();
@@ -44,7 +46,6 @@ pool.getConnection()
   });
 
 // ===== ROTA DE SAÚDE =====
-// O app e o site consultam esta rota pra saber se o backend está vivo
 app.get('/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -63,9 +64,8 @@ app.get('/painel', (req, res) => {
 app.use('/api/auth', authRoutes);           // cadastrar e login
 app.use('/api/ambientes', ambientesRoutes); // ambientes: exigem token
 app.use('/api/eventos', eventosRoutes);     // eventos: exigem token
-
+app.use('/api/sistema', sistemaRoutes);     // armar/desarmar 
 // ===== ROTA 404 =====
-// Deve vir DEPOIS de todas as rotas válidas (ordem importa!)
 app.use((req, res) => {
   res.status(404).json({ erro: 'Endpoint não encontrado' });
 });
