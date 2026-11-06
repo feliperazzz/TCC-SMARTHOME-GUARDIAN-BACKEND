@@ -51,13 +51,13 @@
 
     // Qualquer 'novo_evento' vindo do servidor aparece no log na hora
     socket.on('novo_evento', (evento) => registrarLog(evento));
-    socket.on('evento_registrado', () => console.log('Confirmado pelo servidor'));
+    socket.on('evento_registrado', (r) => console.log('✅ Registrado no banco, id:', r.id));
     socket.on('erro', (e) => alert(e.mensagem));
 
     function disparar(tipo) {
       const ambiente = document.getElementById('ambiente').value;
       socket.emit('simular_evento', {
-        usuario_id: 1,                       // usuário de teste
+        usuario_id: 5,   // ⬅️ 5 = testecadastro1@teste.com (mesma conta do app!)
         ambiente_id: ambiente ? Number(ambiente) : null,
         tipo: tipo,
       });
@@ -65,8 +65,9 @@
 
     function registrarLog(ev) {
       const hora = new Date(ev.criado_em).toLocaleTimeString('pt-BR');
+      const ambienteTxt = ev.ambiente ? ` — ${ev.ambiente}` : '';
       document.getElementById('log').innerHTML +=
-        `<br>[${hora}] <span class="${ev.severidade}">⚠ ${ev.titulo}</span>`;
+        `<br>[${hora}] <span class="${ev.severidade}">⚠ ${ev.titulo}${ambienteTxt}</span>`;
     }
   </script>
 </body>

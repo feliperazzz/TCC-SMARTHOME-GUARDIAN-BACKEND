@@ -131,6 +131,8 @@ O painel de simulação (`/painel`) emite eventos via Socket.io que são validad
 | rafael@teste.com | 123456 |
 | felipe@teste.com | 123456 |
 | luan@teste.com | 123456 |
+| murilo@teste.com | 123456 |
+| testecadastro1@teste.com | 123456 |
 
 ---
 

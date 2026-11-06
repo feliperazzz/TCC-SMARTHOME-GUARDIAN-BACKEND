@@ -2,7 +2,7 @@
 // SMART HOME GUARDIAN - BACKEND
 // Servidor principal + health check + banco + autenticação
 // + Ambientes/Eventos + Sistema (armar/desarmar)
-// + IoT simulada em tempo real (Socket.io)
+// + IoT simulada em tempo real (Socket.io — grava no banco!)
 // + Variáveis de ambiente (dotenv)
 // ============================================================
 require('dotenv').config(); // ⬅️ carrega o .env PRIMEIRO de tudo
@@ -16,7 +16,7 @@ const pool = require('./db');
 const authRoutes = require('./routes/auth.routes');
 const ambientesRoutes = require('./routes/ambientes.routes');
 const eventosRoutes = require('./routes/eventos.routes');
-const sistemaRoutes = require('./routes/sistema'); // ===== 7.7 NOVO =====
+const sistemaRoutes = require('./routes/sistema'); // ===== 7.7 =====
 const { configurarIoT } = require('./sockets/iot.socket');
 
 const app = express();
@@ -64,7 +64,8 @@ app.get('/painel', (req, res) => {
 app.use('/api/auth', authRoutes);           // cadastrar e login
 app.use('/api/ambientes', ambientesRoutes); // ambientes: exigem token
 app.use('/api/eventos', eventosRoutes);     // eventos: exigem token
-app.use('/api/sistema', sistemaRoutes);     // armar/desarmar 
+app.use('/api/sistema', sistemaRoutes);     // armar/desarmar
+
 // ===== ROTA 404 =====
 app.use((req, res) => {
   res.status(404).json({ erro: 'Endpoint não encontrado' });
