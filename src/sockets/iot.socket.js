@@ -1,19 +1,15 @@
 // ============================================================
-// IOT SOCKET — registra eventos no banco e transmite em tempo real
-//
-// Compatível com o app e o painel atuais (sem alterações):
-// - Painel IoT: conecta sem token e envia 'simular_evento'
-// - App: conecta com ou sem token (se tiver, é identificado)
-//
-// Dono do evento (ordem de prioridade):
-// 1. Usuário autenticado conectado por socket (app com token)
-// 2. Último usuário que usou a API com token (REST)
-// 3. usuario_id enviado pelo painel (último recurso)
+// IoT EM TEMPO REAL - SMART HOME GUARDIAN
+// - Só entra no socket quem envia um JWT válido
+// - Cada usuário fica na sala "usuario_<id>"
+// - O evento simulado é gravado para o DONO do ambiente
+//   (ou para o usuário logado, se não houver ambiente)
 // ============================================================
 const jwt = require('jsonwebtoken');
 const pool = require('../db');
-const { JWT_SECRET, getUltimoUsuarioId } = require('../middlewares/auth');
+const { JWT_SECRET } = require('../middlewares/auth');
 
+// Mesmo catálogo do eventos.routes.js (manter os dois iguais)
 const CATALOGO_EVENTOS = {
   movimento: {
     titulo: 'Movimento detectado',
@@ -37,105 +33,80 @@ const CATALOGO_EVENTOS = {
   },
 };
 
-// socketId -> usuarioId, só para sockets que enviaram token válido
-const usuariosConectados = new Map();
-
-function resolverDono(usuarioDoPainel) {
-  // 1. usuário autenticado mais recente conectado por socket
-  const autenticados = [...usuariosConectados.values()];
-  if (autenticados.length > 0) return autenticados[autenticados.length - 1];
-
-  // 2. último usuário que usou a API com token
-  const ultimo = getUltimoUsuarioId();
-  if (ultimo) return ultimo;
-
-  // 3. valor enviado pelo painel
-  return usuarioDoPainel ? Number(usuarioDoPainel) : null;
-}
-
 function configurarIoT(io) {
-  // Autenticação opcional: sem token (painel) ou com token inválido segue normal
+  // ---------- 1) AUTENTICAÇÃO DO SOCKET ----------
+  // O app Flutter e o painel enviam { auth: { token } } ao conectar
   io.use((socket, next) => {
-    const token = socket.handshake.auth?.token;
-    if (token) {
-      try {
-        const payload = jwt.verify(token, JWT_SECRET);
-        socket.usuarioId = payload.id;
-      } catch {
-        // token inválido: trata como conexão sem identificação
-      }
+    const token = socket.handshake.auth && socket.handshake.auth.token;
+    if (!token) return next(new Error('Token não fornecido'));
+
+    try {
+      const payload = jwt.verify(token, JWT_SECRET);
+      socket.usuarioId = payload.id;
+      next();
+    } catch {
+      next(new Error('Token inválido ou expirado'));
     }
-    next();
   });
 
+  // ---------- 2) CONEXÃO ----------
   io.on('connection', (socket) => {
-    if (socket.usuarioId) {
-      usuariosConectados.set(socket.id, socket.usuarioId);
-      console.log('⚡ App conectado como usuário', socket.usuarioId);
-    } else {
-      console.log('⚡ Painel IoT conectado:', socket.id);
-    }
+    // Cada usuário escuta somente a própria sala
+    socket.join(`usuario_${socket.usuarioId}`);
+    console.log(`📡 Socket conectado: usuário ${socket.usuarioId}`);
 
-    socket.on('simular_evento', async (dados = {}) => {
+    // ---------- 3) SIMULAR EVENTO ----------
+    // Dados esperados: { tipo, ambiente_id } (ambiente_id é opcional)
+    socket.on('simular_evento', async (dados = {}, ack) => {
       try {
-        const { tipo } = dados;
-        const def = CATALOGO_EVENTOS[tipo];
+        const def = CATALOGO_EVENTOS[dados.tipo];
         if (!def) {
           return socket.emit('erro', { mensagem: 'Tipo de evento desconhecido' });
         }
 
-        const usuarioId = resolverDono(dados.usuario_id);
-        if (!usuarioId) {
-          return socket.emit('erro', { mensagem: 'Não foi possível identificar o usuário' });
-        }
-
-        // Ambiente só é aceito se pertencer ao dono do evento
         let ambienteId = null;
-        let nomeAmbiente = null;
+        let ambienteNome = null;
+
+        // Se veio um ambiente, ele precisa pertencer ao usuário logado
         if (dados.ambiente_id) {
-          const [ambRows] = await pool.query(
+          const [[ambiente]] = await pool.query(
             'SELECT id, nome FROM ambientes WHERE id = ? AND usuario_id = ?',
-            [dados.ambiente_id, usuarioId]
+            [Number(dados.ambiente_id), socket.usuarioId]
           );
-          if (ambRows.length > 0) {
-            ambienteId = ambRows[0].id;
-            nomeAmbiente = ambRows[0].nome;
+          if (!ambiente) {
+            return socket.emit('erro', { mensagem: 'Ambiente não pertence a este usuário' });
           }
+          ambienteId = ambiente.id;
+          ambienteNome = ambiente.nome;
         }
 
         const [resultado] = await pool.query(
-          `INSERT INTO eventos
-             (usuario_id, ambiente_id, tipo, titulo, descricao, severidade, lido)
+          `INSERT INTO eventos (usuario_id, ambiente_id, tipo, titulo, descricao, severidade, lido)
            VALUES (?, ?, ?, ?, ?, ?, 0)`,
-          [usuarioId, ambienteId, tipo, def.titulo, def.descricao, def.severidade]
+          [socket.usuarioId, ambienteId, dados.tipo, def.titulo, def.descricao, def.severidade]
         );
 
         const evento = {
           id: resultado.insertId,
-          usuario_id: usuarioId,
-          ambiente_id: ambienteId,
-          ambiente: nomeAmbiente,
-          tipo,
+          tipo: dados.tipo,
           titulo: def.titulo,
           descricao: def.descricao,
           severidade: def.severidade,
+          ambiente_id: ambienteId,
+          ambiente: ambienteNome,
           lido: 0,
           criado_em: new Date().toISOString(),
         };
 
-        console.log(`⚡ Evento ${evento.id} gravado para o usuário ${usuarioId}`);
+        // Envia só para a sala do dono (o app dele recebe o aviso)
+        io.to(`usuario_${socket.usuarioId}`).emit('novo_evento', evento);
+        socket.emit('evento_registrado', { id: resultado.insertId });
 
-        // Transmite para todos (como combinado). Cada evento leva usuario_id.
-        io.emit('novo_evento', evento);
-        socket.emit('evento_registrado', { id: evento.id });
+        if (typeof ack === 'function') ack({ ok: true, id: resultado.insertId });
       } catch (err) {
-        console.error('Erro ao registrar evento IoT:', err);
-        socket.emit('erro', { mensagem: 'Erro ao registrar evento' });
+        console.error('Erro no evento IoT:', err);
+        socket.emit('erro', { mensagem: 'Erro interno ao registrar evento' });
       }
-    });
-
-    socket.on('disconnect', () => {
-      usuariosConectados.delete(socket.id);
     });
   });
 }

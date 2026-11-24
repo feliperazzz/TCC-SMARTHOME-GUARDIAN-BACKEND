@@ -8,10 +8,12 @@
     body { background:#071116; color:#E8F4F2; font-family:Arial,sans-serif;
            max-width:700px; margin:40px auto; text-align:center; }
     h1 { color:#4DB6AC; }
-    select { padding:10px 16px; background:#0D2529; color:#E8F4F2;
-             border:1px solid #4DB6AC; border-radius:8px; font-size:16px; }
+    input, select { padding:10px 16px; background:#0D2529; color:#E8F4F2;
+             border:1px solid #4DB6AC; border-radius:8px; font-size:16px; margin:4px; }
+    .card { background:#0B1A1F; border:1px solid #214044; border-radius:12px;
+            padding:20px; margin-top:20px; }
     .grade { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:24px; }
-    button { padding:22px 10px; font-size:16px; font-weight:bold; color:#fff;
+    button { padding:14px 10px; font-size:16px; font-weight:bold; color:#fff;
              background:#0D2529; border:2px solid #4DB6AC; border-radius:12px;
              cursor:pointer; transition:.2s; }
     button:hover { background:#4DB6AC; color:#071116; }
@@ -19,55 +21,166 @@
     #log { margin-top:26px; text-align:left; background:#0B1A1F;
            border:1px solid #214044; border-radius:10px; padding:14px;
            min-height:120px; font-size:14px; }
+    .linha { margin-top:6px; }
     .info{color:#90caf9} .atencao{color:#ffb74d} .critico{color:#e57373}
+    .sair { color:#4DB6AC; cursor:pointer; text-decoration:underline; }
+    #status { font-size:13px; color:#8fa; }
   </style>
 </head>
 <body>
   <h1>🛡️ Painel IoT Simulado</h1>
-  <p>Simule os sensores da residência — os eventos chegam em tempo real.</p>
+  <p>Entre com a conta do morador. Os eventos vão só para a conta logada.</p>
 
-  <select id="ambiente">
-    <option value="">Sem ambiente específico</option>
-    <option value="1">Sala</option>
-    <option value="2">Cozinha</option>
-    <option value="3">Quarto</option>
-    <option value="4">Garagem</option>
-  </select>
-
-  <div class="grade">
-    <button onclick="disparar('movimento')">🚶 Movimento</button>
-    <button onclick="disparar('porta_aberta')">🚪 Porta aberta</button>
-    <button onclick="disparar('temperatura_elevada')">🔥 Temperatura elevada</button>
-    <button class="critico" onclick="disparar('invasao')">🚨 Tentativa de invasão</button>
+  <!-- LOGIN DO PAINEL -->
+  <div id="login" class="card">
+    <input id="email" type="email" placeholder="E-mail"><br>
+    <input id="senha" type="password" placeholder="Senha"><br>
+    <button id="btnEntrar" onclick="entrar()">Entrar</button>
+    <p id="erroLogin" class="critico"></p>
   </div>
 
-  <div id="log"><b>Log de eventos:</b><br></div>
+  <!-- PAINEL DE SIMULAÇÃO (aparece após o login) -->
+  <div id="painel" style="display:none">
+    <p>
+      Conectado como <b id="nomeUsuario"></b> ·
+      <span class="sair" onclick="sair()">sair</span>
+      <br><span id="status">Conectando...</span>
+    </p>
+
+    <select id="ambiente">
+      <option value="">Sem ambiente específico</option>
+    </select>
+
+    <div class="grade">
+      <button onclick="disparar('movimento')">🚶 Movimento</button>
+      <button onclick="disparar('porta_aberta')">🚪 Porta aberta</button>
+      <button onclick="disparar('temperatura_elevada')">🔥 Temperatura elevada</button>
+      <button class="critico" onclick="disparar('invasao')">🚨 Tentativa de invasão</button>
+    </div>
+
+    <div id="log"><b>Log de eventos:</b></div>
+  </div>
 
   <script>
-    // Conecta no MESMO servidor do backend — o socket.io.js já é servido por ele
-    const socket = io('http://localhost:3000');
+    let socket = null;
 
-    socket.on('connect', () => console.log('Conectado!'));
+    // Token fica no sessionStorage: cada aba guarda o seu login.
+    // Assim dá para testar dois usuários no mesmo navegador (uma aba para cada um).
+    const getToken = () => sessionStorage.getItem('iotToken');
 
-    // Qualquer 'novo_evento' vindo do servidor aparece no log na hora
-    socket.on('novo_evento', (evento) => registrarLog(evento));
-    socket.on('evento_registrado', (r) => console.log('✅ Registrado no banco, id:', r.id));
-    socket.on('erro', (e) => alert(e.mensagem));
+    window.addEventListener('load', () => {
+      if (getToken()) iniciarPainel();
+    });
+
+    async function entrar() {
+      const erro = document.getElementById('erroLogin');
+      erro.textContent = '';
+
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('email').value,
+          senha: document.getElementById('senha').value,
+        }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        erro.textContent = data.erro || 'Falha no login';
+        return;
+      }
+
+      sessionStorage.setItem('iotToken', data.token);
+      sessionStorage.setItem('iotNome', data.usuario.nome);
+      iniciarPainel();
+    }
+
+    async function iniciarPainel() {
+      document.getElementById('login').style.display = 'none';
+      document.getElementById('painel').style.display = 'block';
+      document.getElementById('nomeUsuario').textContent = sessionStorage.getItem('iotNome') || '';
+
+      const ok = await carregarAmbientes();
+      if (ok) conectarSocket();
+    }
+
+    // Lista só os ambientes do usuário logado (vêm do banco)
+    async function carregarAmbientes() {
+      const resp = await fetch('/api/ambientes', {
+        headers: { Authorization: 'Bearer ' + getToken() },
+      });
+      if (resp.status === 401) { sair(); return false; }
+
+      const lista = await resp.json();
+      const select = document.getElementById('ambiente');
+      select.innerHTML = '';
+
+      const padrao = document.createElement('option');
+      padrao.value = '';
+      padrao.textContent = 'Sem ambiente específico';
+      select.appendChild(padrao);
+
+      lista.forEach((a) => {
+        const opt = document.createElement('option');
+        opt.value = a.id;
+        opt.textContent = a.nome;
+        select.appendChild(opt);
+      });
+      return true;
+    }
+
+    function conectarSocket() {
+      if (socket) socket.disconnect();
+
+      socket = io({ auth: { token: getToken() } });
+
+      socket.on('connect', () => {
+        document.getElementById('status').textContent = '🟢 Conectado ao servidor';
+      });
+
+      socket.on('connect_error', (e) => {
+        document.getElementById('status').textContent = '🔴 ' + e.message;
+        if (e.message.includes('Token')) sair();
+      });
+
+      socket.on('novo_evento', registrarLog);
+      socket.on('erro', (e) => alert(e.mensagem));
+    }
 
     function disparar(tipo) {
-      const ambiente = document.getElementById('ambiente').value;
+      const amb = document.getElementById('ambiente').value;
       socket.emit('simular_evento', {
-        usuario_id: 5,   // ⬅️ 5 = testecadastro1@teste.com (mesma conta do app!)
-        ambiente_id: ambiente ? Number(ambiente) : null,
         tipo: tipo,
+        ambiente_id: amb ? Number(amb) : null,
       });
     }
 
+    // Monta a linha com DOM (evita HTML injetado pelo nome do ambiente)
     function registrarLog(ev) {
+      const log = document.getElementById('log');
       const hora = new Date(ev.criado_em).toLocaleTimeString('pt-BR');
-      const ambienteTxt = ev.ambiente ? ` — ${ev.ambiente}` : '';
-      document.getElementById('log').innerHTML +=
-        `<br>[${hora}] <span class="${ev.severidade}">⚠ ${ev.titulo}${ambienteTxt}</span>`;
+
+      const linha = document.createElement('div');
+      linha.className = 'linha';
+
+      const span = document.createElement('span');
+      span.className = ev.severidade;
+      span.textContent = `⚠ ${ev.titulo}${ev.ambiente ? ' — ' + ev.ambiente : ''}`;
+
+      linha.textContent = `[${hora}] `;
+      linha.appendChild(span);
+      log.appendChild(linha);
+    }
+
+    function sair() {
+      if (socket) socket.disconnect();
+      socket = null;
+      sessionStorage.removeItem('iotToken');
+      sessionStorage.removeItem('iotNome');
+      document.getElementById('painel').style.display = 'none';
+      document.getElementById('login').style.display = 'block';
+      document.getElementById('senha').value = '';
     }
   </script>
 </body>

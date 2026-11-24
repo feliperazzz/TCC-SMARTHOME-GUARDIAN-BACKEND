@@ -1,38 +1,22 @@
 // ============================================================
-// SMART HOME GUARDIAN - BACKEND
-// Servidor principal + health check + banco + autenticação
-// + Ambientes/Eventos + Sistema (armar/desarmar)
-// + IoT simulada em tempo real (Socket.io — grava no banco!)
-// + Variáveis de ambiente (dotenv)
+// SERVIDOR - sobe o HTTP, o Socket.io e o banco
+// A aplicação Express fica em app.js
 // ============================================================
-require('dotenv').config(); // ⬅️ carrega o .env PRIMEIRO de tudo
+require('dotenv').config(); // carrega o .env PRIMEIRO
 
-const express = require('express');
 const http = require('http');
-const cors = require('cors');
-const path = require('path');
 const { Server } = require('socket.io');
+const app = require('./app');
 const pool = require('./db');
-const authRoutes = require('./routes/auth.routes');
-const ambientesRoutes = require('./routes/ambientes.routes');
-const eventosRoutes = require('./routes/eventos.routes');
-const sistemaRoutes = require('./routes/sistema'); // ===== 7.7 =====
 const { configurarIoT } = require('./sockets/iot.socket');
 
-const app = express();
 const server = http.createServer(app);
 
-// Socket.io: comunicação em tempo real (alertas IoT)
+// Socket.io: alertas IoT em tempo real
 const io = new Server(server, {
   cors: { origin: '*' }, // em produção, restringir à origem do app/site
 });
 configurarIoT(io);
-
-// ===== MIDDLEWARES =====
-app.use(cors());          // permite acesso do app e do site
-app.use(express.json());  // permite receber JSON nas requisições
-// Arquivos estáticos (painel de simulação IoT)
-app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ===== TESTE DE CONEXÃO COM O BANCO =====
 pool.getConnection()
@@ -45,38 +29,6 @@ pool.getConnection()
     console.error('   Verifique usuário, senha e banco no db.js.');
   });
 
-// ===== ROTA DE SAÚDE =====
-app.get('/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    servico: 'Smart Home Guardian API',
-    versao: '1.0.0',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// ===== PAINEL DE SIMULAÇÃO IOT =====
-app.get('/painel', (req, res) => {
-  res.sendFile(path.join(__dirname, '..', 'public', 'painel-iot.html'));
-});
-
-// ===== ROTAS DA API =====
-app.use('/api/auth', authRoutes);           // cadastrar e login
-app.use('/api/ambientes', ambientesRoutes); // ambientes: exigem token
-app.use('/api/eventos', eventosRoutes);     // eventos: exigem token
-app.use('/api/sistema', sistemaRoutes);     // armar/desarmar
-
-// ===== ROTA 404 =====
-app.use((req, res) => {
-  res.status(404).json({ erro: 'Endpoint não encontrado' });
-});
-
-// ===== TRATAMENTO DE ERROS GLOBAL =====
-app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
-  res.status(500).json({ erro: 'Erro interno do servidor' });
-});
-
 // ===== SUBIR O SERVIDOR =====
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
@@ -85,5 +37,6 @@ server.listen(PORT, () => {
   console.log(`🚀  Servidor rodando em http://localhost:${PORT}`);
   console.log(`❤️  Health check: http://localhost:${PORT}/health`);
   console.log(`⚡ Painel IoT: http://localhost:${PORT}/painel`);
+  console.log(`📘 Documentação: http://localhost:${PORT}/api-docs`);
   console.log('================================================');
 });
