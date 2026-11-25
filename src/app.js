@@ -17,9 +17,19 @@ const sistemaRoutes = require('./routes/sistema');
 
 const app = express();
 
+// ===== CORS =====
+// Sem CORS_ORIGINS definido, libera todas as origens (ok para TCC).
+// Em produção, defina no painel: CORS_ORIGINS=https://seu-site.vercel.app
+const origens = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(',').map((o) => o.trim())
+  : '*';
+
+app.use(cors({ origin: origens, methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'] }));
+
 // ===== MIDDLEWARES =====
-app.use(cors());
-app.use(express.json());
+app.set('trust proxy', 1); // atrás do proxy do Render/Railway
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // ===== SAÚDE =====
@@ -28,6 +38,7 @@ app.get('/health', (req, res) => {
     status: 'ok',
     servico: 'Smart Home Guardian API',
     versao: '1.0.0',
+    ambiente: process.env.NODE_ENV || 'development',
     timestamp: new Date().toISOString(),
   });
 });
@@ -51,10 +62,10 @@ app.use('/api/sistema', sistemaRoutes);
 
 // ===== ROTA 404 =====
 app.use((req, res) => {
-  res.status(404).json({ erro: 'Endpoint não encontrado' });
+  res.status(404).json({ erro: 'Endpoint não encontrado', caminho: req.originalUrl });
 });
 
-// ===== ERROS GLOBAIS =====
+// ===== ERROS GLOBAIS (sempre por último) =====
 app.use((err, req, res, next) => {
   console.error('Erro não tratado:', err);
   res.status(500).json({ erro: 'Erro interno do servidor' });

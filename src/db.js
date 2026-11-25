@@ -1,26 +1,27 @@
 // ============================================================
-// CONEXÃO COM O BANCO MySQL — local ou nuvem (Aiven)
-// Os dados sensíveis vêm do arquivo .env
-// (nada de senha escrita direto no código!)
+// CONEXÃO COM O BANCO (MariaDB/MySQL)
 // ============================================================
-require('dotenv').config(); // carrega o .env ANTES de tudo
-
 const mysql = require('mysql2/promise');
+require('dotenv').config();
 
-const pool = mysql.createPool({
+const config = {
   host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT || 3306,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
+  port: Number(process.env.DB_PORT) || 3306, // Railway e Aiven usam porta própria
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_SENHA || process.env.DB_PASS || process.env.DB_PASSWORD || '',
+  database: process.env.DB_NOME || process.env.DB_NAME || 'smart_home_guardian',
   waitForConnections: true,
   connectionLimit: 10,
-  // SSL: obrigatório na nuvem (Aiven). Ativa quando DB_SSL=true no .env.
-  // Com DB_SSL=false (ou sem a linha), conecta normal no MySQL local.
-  ssl:
-    process.env.DB_SSL === 'true'
-      ? { rejectUnauthorized: false }
-      : undefined,
-});
+  queueLimit: 0,
+  charset: 'utf8mb4',
+  timezone: '-03:00',
+};
+
+// SSL desligado por padrão; ligue com DB_SSL=true (obrigatório no Aiven)
+if (String(process.env.DB_SSL).toLowerCase() === 'true') {
+  config.ssl = { rejectUnauthorized: false };
+}
+
+const pool = mysql.createPool(config);
 
 module.exports = pool;

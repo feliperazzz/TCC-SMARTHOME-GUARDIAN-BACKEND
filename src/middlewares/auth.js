@@ -9,13 +9,14 @@ const jwt = require('jsonwebtoken');
 // Secret vem do ambiente (.env)
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Aviso no terminal se o .env estiver sem a secret
+// Falha explícita se a secret não existir
 if (!JWT_SECRET) {
-  console.warn('⚠️  JWT_SECRET não encontrada no .env! O login vai falhar.');
+  console.error('❌ JWT_SECRET não encontrada. Defina no .env ou nas variáveis da hospedagem.');
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1); // não sobe quebrado em produção
+  }
+  console.warn('⚠️  Continuando em desenvolvimento sem secret — o login vai falhar.');
 }
-
-// Último usuário autenticado que usou a API (usado pelo socket IoT)
-let ultimoUsuarioId = null;
 
 function verificarToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -28,16 +29,17 @@ function verificarToken(req, res, next) {
 
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+
+    // Garante que o token realmente carrega o id do usuário
+    if (!payload || !payload.id) {
+      return res.status(401).json({ erro: 'Token sem identificador de usuário' });
+    }
+
     req.usuarioId = payload.id; // deixa o id do usuário disponível nas rotas
-    ultimoUsuarioId = payload.id; // registra quem está usando o app
-    next();
+    return next();
   } catch (err) {
     return res.status(401).json({ erro: 'Token inválido ou expirado' });
   }
 }
 
-function getUltimoUsuarioId() {
-  return ultimoUsuarioId;
-}
-
-module.exports = { verificarToken, JWT_SECRET, getUltimoUsuarioId };
+module.exports = { verificarToken, JWT_SECRET };

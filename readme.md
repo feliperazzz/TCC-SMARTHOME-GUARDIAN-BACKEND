@@ -113,7 +113,7 @@ O painel de simulação (`/painel`) emite eventos via Socket.io que são validad
    ```bash
    npm install
    ```
-4. Configure a conexão com o banco em `src/db.js` (usuário, senha e nome do banco).
+4. Copie `.env.example` para `.env` e informe os dados do seu MySQL: `DB_HOST`, `DB_PORT` (opcional, padrão `3306`), `DB_USER`, `DB_PASS` (ou `DB_SENHA`) e `DB_NAME` (ou `DB_NOME`). Use a senha configurada no seu servidor MySQL; não compartilhe nem versione o arquivo `.env`.
 5. Inicie o servidor:
    ```bash
    npm run dev
